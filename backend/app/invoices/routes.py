@@ -103,22 +103,21 @@ def get_invoice(invoice_id: str, auth: AuthContext = Depends(get_current_user), 
 
 @router.get("/invoices/{invoice_id}/file")
 def get_invoice_file(invoice_id: str, exp: int = Query(...), sig: str = Query(...),
-                     download: int = Query(0), auth: AuthContext = Depends(get_current_user),
-                     db: Session = Depends(session.get_db)):
+                     download: int = Query(0), db: Session = Depends(session.get_db)):
     """Serve the original invoice file for in-browser preview (inline) or download.
 
-    Auth is two-layered: a short-lived HMAC token (exp+sig) so iframes/img tags
-    can fetch without a Bearer header, plus a Supabase JWT check so only
-    authenticated users reach this route. The invoice's organization membership
-    is enforced via the token being tied to this invoice_id.
+    Auth model: iframes/<img> tags cannot send a Bearer header, so this endpoint
+    authenticates via a short-lived HMAC token (exp+sig) tied to this invoice_id
+    and signed with PREVIEW_TOKEN_SECRET. The token is only ever minted by
+    `get_invoice_detail` (which already checks Supabase JWT + org membership),
+    so possession of a valid, unexpired token proves the caller was authorized
+    to view this invoice. The token expires in 10 minutes.
     """
     if not service.verify_file_token(invoice_id, exp, sig):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid or expired file link")
     invoice = db.get(models.Invoice, uuid.UUID(invoice_id))
     if not invoice:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Invoice not found")
-    # enforce org membership even with a valid token
-    service._require_member(db, auth, str(invoice.organization_id))
     storage = _storage()
     data = storage.get(settings.supabase_storage_originals_bucket, invoice.storage_key)
     disposition = "attachment" if download else "inline"
