@@ -144,7 +144,7 @@ def main():
     ]
     api_payload = {
         "type": "web_service", "name": "invoice-saas-api", "region": "ohio",
-        "repoUrl": repo_url, "branch": "main",
+        "repo": repo_url, "branch": "main",
         "serviceDetails": {
             "runtime": "docker",
             "dockerfilePath": "./backend/Dockerfile",
@@ -169,7 +169,7 @@ def main():
     ]
     web_payload = {
         "type": "web_service", "name": "invoice-saas-web", "region": "ohio",
-        "repoUrl": repo_url, "branch": "main",
+        "repo": repo_url, "branch": "main",
         "serviceDetails": {
             "runtime": "docker",
             "dockerfilePath": "./frontend/Dockerfile",
