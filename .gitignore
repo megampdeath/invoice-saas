@@ -18,3 +18,7 @@ out/
 # Local storage
 storage/
 *.log
+
+# TS build info
+*.tsbuildinfo
+frontend/tsconfig.tsbuildinfo
