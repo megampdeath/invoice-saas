@@ -145,8 +145,13 @@ def main():
     api_payload = {
         "type": "web_service", "name": "invoice-saas-api", "region": "ohio",
         "repoUrl": repo_url, "branch": "main",
-        "dockerfilePath": "./backend/Dockerfile", "dockerContext": "./backend",
-        "plan": "free", "healthCheckPath": "/api/health",
+        "serviceDetails": {
+            "runtime": "docker",
+            "dockerfilePath": "./backend/Dockerfile",
+            "dockerContext": "./backend",
+            "plan": "free",
+            "healthCheckPath": "/api/health",
+        },
         "envVars": api_envs,
     }
     if owner_id: api_payload["ownerId"] = owner_id
@@ -165,8 +170,13 @@ def main():
     web_payload = {
         "type": "web_service", "name": "invoice-saas-web", "region": "ohio",
         "repoUrl": repo_url, "branch": "main",
-        "dockerfilePath": "./frontend/Dockerfile", "dockerContext": "./frontend",
-        "plan": "free", "envVars": web_envs,
+        "serviceDetails": {
+            "runtime": "docker",
+            "dockerfilePath": "./frontend/Dockerfile",
+            "dockerContext": "./frontend",
+            "plan": "free",
+        },
+        "envVars": web_envs,
     }
     if owner_id: web_payload["ownerId"] = owner_id
     st, body = create(rk, web_payload)
