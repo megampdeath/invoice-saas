@@ -113,18 +113,21 @@ def compute_hash(data: bytes) -> str:
 def build_file_url(invoice_id, expires_in: int = 600) -> str:
     """Short-lived, HMAC-signed URL for viewing an invoice file in an <iframe>/<img>.
 
-    iframes/img tags cannot send a Bearer Authorization header, so we issue a
-    short-lived token (signed with PREVIEW_TOKEN_SECRET) that the public
-    /api/invoices/{id}/file endpoint verifies. The endpoint serves the file
-    with Content-Disposition: inline so PDFs render in the browser instead of
-    downloading.
+    Returns a **relative** URL (`/api/invoices/{id}/file?exp=...&sig=...`) so the
+    browser resolves it against the frontend's origin. The frontend proxies
+    /api/* to the backend via a same-origin rewrite, which makes the file
+    same-origin to the page — Chrome only renders inline PDFs in <iframe> when
+    they are same-origin; cross-origin PDFs are force-downloaded or blanked.
+
+    iframes/img tags cannot send a Bearer Authorization header, so the URL
+    carries a short-lived HMAC token (signed with PREVIEW_TOKEN_SECRET) that the
+    /api/invoices/{id}/file endpoint verifies. The token expires in 10 minutes.
     """
     import time, hmac
     exp = int(time.time()) + expires_in
     msg = f"file:{invoice_id}:{exp}".encode()
     sig = hmac.new((settings.preview_token_secret or "dev-secret").encode(), msg, hashlib.sha256).hexdigest()
-    base = (settings.backend_base_url or "").rstrip("/")
-    return f"{base}/api/invoices/{invoice_id}/file?exp={exp}&sig={sig}"
+    return f"/api/invoices/{invoice_id}/file?exp={exp}&sig={sig}"
 
 
 def verify_file_token(invoice_id, exp: int, sig: str) -> bool:
