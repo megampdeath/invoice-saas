@@ -110,6 +110,32 @@ def compute_hash(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def build_file_url(invoice_id, expires_in: int = 600) -> str:
+    """Short-lived, HMAC-signed URL for viewing an invoice file in an <iframe>/<img>.
+
+    iframes/img tags cannot send a Bearer Authorization header, so we issue a
+    short-lived token (signed with PREVIEW_TOKEN_SECRET) that the public
+    /api/invoices/{id}/file endpoint verifies. The endpoint serves the file
+    with Content-Disposition: inline so PDFs render in the browser instead of
+    downloading.
+    """
+    import time, hmac
+    exp = int(time.time()) + expires_in
+    msg = f"file:{invoice_id}:{exp}".encode()
+    sig = hmac.new((settings.preview_token_secret or "dev-secret").encode(), msg, hashlib.sha256).hexdigest()
+    base = (settings.backend_base_url or "").rstrip("/")
+    return f"{base}/api/invoices/{invoice_id}/file?exp={exp}&sig={sig}"
+
+
+def verify_file_token(invoice_id, exp: int, sig: str) -> bool:
+    import time, hmac
+    if int(time.time()) > int(exp):
+        return False
+    msg = f"file:{invoice_id}:{exp}".encode()
+    expected = hmac.new((settings.preview_token_secret or "dev-secret").encode(), msg, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, sig or "")
+
+
 def upload_invoice(
     db: Session, auth: AuthContext, org_id: str, file_name: str, mime_type: str, file_bytes: bytes, storage: StorageBackend
 ) -> models.Invoice:
@@ -231,7 +257,7 @@ def get_invoice_detail(db: Session, auth: AuthContext, invoice_id: str, storage:
             models.InvoiceParty.party_type == "supplier",
         )
     ).scalar_one_or_none()
-    url = storage.signed_url(settings.supabase_storage_originals_bucket, invoice.storage_key, 600)
+    url = build_file_url(invoice.id, expires_in=600)
     return {
         "id": str(invoice.id),
         "status": invoice.status,

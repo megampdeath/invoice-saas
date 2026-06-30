@@ -6,10 +6,12 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import AuthContext, get_current_user
+from app.core.config import settings
 from app.db import models, session
 from app.invoices import exports, schemas, service
 from app.storage.supabase_storage import get_storage
@@ -97,6 +99,37 @@ def get_invoice(invoice_id: str, auth: AuthContext = Depends(get_current_user), 
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(e))
     except service.ValidationError as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
+
+
+@router.get("/invoices/{invoice_id}/file")
+def get_invoice_file(invoice_id: str, exp: int = Query(...), sig: str = Query(...),
+                     download: int = Query(0), auth: AuthContext = Depends(get_current_user),
+                     db: Session = Depends(session.get_db)):
+    """Serve the original invoice file for in-browser preview (inline) or download.
+
+    Auth is two-layered: a short-lived HMAC token (exp+sig) so iframes/img tags
+    can fetch without a Bearer header, plus a Supabase JWT check so only
+    authenticated users reach this route. The invoice's organization membership
+    is enforced via the token being tied to this invoice_id.
+    """
+    if not service.verify_file_token(invoice_id, exp, sig):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid or expired file link")
+    invoice = db.get(models.Invoice, uuid.UUID(invoice_id))
+    if not invoice:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Invoice not found")
+    # enforce org membership even with a valid token
+    service._require_member(db, auth, str(invoice.organization_id))
+    storage = _storage()
+    data = storage.get(settings.supabase_storage_originals_bucket, invoice.storage_key)
+    disposition = "attachment" if download else "inline"
+    from urllib.parse import quote
+    fname = quote(invoice.original_filename)
+    headers = {
+        "Content-Type": invoice.file_mime_type or "application/octet-stream",
+        "Content-Disposition": f"{disposition}; filename*=UTF-8''{fname}",
+        "Cache-Control": "private, max-age=600",
+    }
+    return Response(content=data, headers=headers, media_type=invoice.file_mime_type or "application/octet-stream")
 
 
 @router.patch("/invoices/{invoice_id}")
