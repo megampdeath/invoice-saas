@@ -1,0 +1,23 @@
+# Vercel Python serverless requirements.
+# Vercel reads requirements.txt (not pyproject.toml). Pinned loosely to match
+# pyproject.toml. Binary packages (psycopg2-binary, pillow) work on Vercel's
+# Python runtime.
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.6
+pydantic-settings>=2.2
+sqlalchemy>=2.0
+alembic>=1.13
+psycopg2-binary>=2.9
+python-multipart>=0.0.9
+httpx>=0.27
+PyJWT[crypto]>=2.8
+cryptography>=42.0
+redis>=5.0
+rq>=1.16
+supabase>=2.4
+boto3>=1.34
+openpyxl>=3.1
+pypdf>=4.0
+pillow>=10.0
+stripe>=8.0
