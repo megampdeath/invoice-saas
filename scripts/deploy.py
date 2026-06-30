@@ -143,7 +143,7 @@ def main():
         {"key": "WEB_CONCURRENCY", "value": "1"},
     ]
     api_payload = {
-        "type": "web", "name": "invoice-saas-api", "region": "ohio",
+        "type": "web_service", "name": "invoice-saas-api", "region": "ohio",
         "repoUrl": repo_url, "branch": "main",
         "dockerfilePath": "./backend/Dockerfile", "dockerContext": "./backend",
         "plan": "free", "healthCheckPath": "/api/health",
@@ -163,7 +163,7 @@ def main():
         {"key": "NODE_ENV", "value": "production"},
     ]
     web_payload = {
-        "type": "web", "name": "invoice-saas-web", "region": "ohio",
+        "type": "web_service", "name": "invoice-saas-web", "region": "ohio",
         "repoUrl": repo_url, "branch": "main",
         "dockerfilePath": "./frontend/Dockerfile", "dockerContext": "./frontend",
         "plan": "free", "envVars": web_envs,
