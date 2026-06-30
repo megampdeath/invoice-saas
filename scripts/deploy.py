@@ -1,14 +1,13 @@
-"""Deploy the Invoice SaaS to GitHub + Render via REST APIs.
+"""Deploy the Invoice SaaS to GitHub + Render — FREE TIER ONLY.
+
+Creates only the two free web services (API + frontend). No Redis, no worker:
+the API runs extraction/exports inline (REDIS_URL empty -> inline fallback).
 
 Needs env: GITHUB_TOKEN, RENDER_API_KEY
 Optional: GITHUB_REPO_NAME (default invoice-saas)
 
-Pipeline:
-  1. Create/push a private GitHub repo from the current commit.
-  2. Create Render Redis, wait for its connection string.
-  3. Create the API (web), worker, and frontend services with all env vars
-     (secrets read from local .env) pointing at the GitHub repo.
-  4. Poll the API health endpoint until live.
+Cost: $0. Trade-offs: services sleep after 15 min idle (cold start ~30s), no
+true background processing.
 
 Tokens are used in-session only; nothing is written to disk.
 """
@@ -54,6 +53,7 @@ def rd(key):
 
 
 def read_env_secrets():
+    """Read backend secrets from local .env (never committed)."""
     secrets = {
         "SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY",
         "SUPABASE_JWT_ISSUER", "SUPABASE_JWT_AUDIENCE",
@@ -107,7 +107,7 @@ def main():
     if "DATABASE_URL" not in secrets:
         print("ERROR: .env missing DATABASE_URL"); sys.exit(1)
 
-    # 1) GitHub
+    # 1) GitHub — create private repo + push
     st, me = http("GET", f"{GITHUB}/user", gh(gh_token))
     if st != 200:
         print("GitHub auth failed:", st, me); sys.exit(1)
@@ -119,7 +119,7 @@ def main():
                         {"name": repo_name, "private": True, "auto_init": False})
         if st not in (200, 201):
             print("[github] create repo failed:", st, body); sys.exit(1)
-        print(f"[github] created {owner}/{repo_name}")
+        print(f"[github] created private repo {owner}/{repo_name}")
     else:
         print(f"[github] repo {owner}/{repo_name} exists")
     remote = f"https://{owner}:{gh_token}@github.com/{owner}/{repo_name}.git"
@@ -135,33 +135,17 @@ def main():
     secrets["FRONTEND_BASE_URL"] = web_url
     secrets["BACKEND_BASE_URL"] = api_url
 
-    # 2) Redis
-    redis_id = create_service(render_key, {
-        "type": "redis", "name": "invoice-saas-redis", "region": "ohio",
-        "plan": "free", "ipAllowList": [],
-    }, "invoice-saas-redis")
-    redis_url = ""
-    if redis_id:
-        print("[render] waiting for Redis connection string...")
-        for _ in range(40):
-            st, body = http("GET", f"{RENDER}/services/{redis_id}", rd(render_key))
-            cs = (body or {}).get("connectionString") if isinstance(body, dict) else None
-            if cs:
-                redis_url = cs; break
-            time.sleep(10)
-        print(f"[render] redis_url {'ready' if redis_url else 'NOT ready'}")
-
-    # 3) API
+    # 2) API web service (free) — inline fallback, no Redis
     api_envs = [{"key": k, "value": v} for k, v in secrets.items()]
     api_envs += [
-        {"key": "REDIS_URL", "value": redis_url or "redis://127.0.0.1:6379"},
+        {"key": "REDIS_URL", "value": ""},                  # inline fallback
         {"key": "APP_ENV", "value": "production"},
-        {"key": "EXTRACTION_PROVIDER", "value": "mock"},
+        {"key": "EXTRACTION_PROVIDER", "value": "mock"},    # flip to "textract" later
         {"key": "STORAGE_BACKEND", "value": "supabase"},
         {"key": "SUPABASE_STORAGE_ORIGINALS_BUCKET", "value": "invoice-originals"},
         {"key": "SUPABASE_STORAGE_EXPORTS_BUCKET", "value": "invoice-exports"},
         {"key": "SUPABASE_STORAGE_OCR_RAW_BUCKET", "value": "ocr-raw-results"},
-        {"key": "WEB_CONCURRENCY", "value": "2"},
+        {"key": "WEB_CONCURRENCY", "value": "1"},
     ]
     create_service(render_key, {
         "type": "web", "name": "invoice-saas-api", "region": "ohio",
@@ -171,25 +155,7 @@ def main():
         "envVars": api_envs,
     }, "invoice-saas-api")
 
-    # 4) Worker
-    worker_envs = [{"key": k, "value": v} for k, v in secrets.items()]
-    worker_envs += [
-        {"key": "REDIS_URL", "value": redis_url or "redis://127.0.0.1:6379"},
-        {"key": "APP_ENV", "value": "production"},
-        {"key": "EXTRACTION_PROVIDER", "value": "mock"},
-        {"key": "STORAGE_BACKEND", "value": "supabase"},
-        {"key": "SUPABASE_STORAGE_ORIGINALS_BUCKET", "value": "invoice-originals"},
-        {"key": "SUPABASE_STORAGE_EXPORTS_BUCKET", "value": "invoice-exports"},
-        {"key": "SUPABASE_STORAGE_OCR_RAW_BUCKET", "value": "ocr-raw-results"},
-    ]
-    create_service(render_key, {
-        "type": "worker", "name": "invoice-saas-worker", "region": "ohio",
-        "repoUrl": repo_url, "branch": "main",
-        "dockerfilePath": "./backend/Dockerfile.worker", "dockerContext": "./backend",
-        "plan": "free", "envVars": worker_envs,
-    }, "invoice-saas-worker")
-
-    # 5) Frontend
+    # 3) Frontend web service (free)
     create_service(render_key, {
         "type": "web", "name": "invoice-saas-web", "region": "ohio",
         "repoUrl": repo_url, "branch": "main",
@@ -203,14 +169,17 @@ def main():
         ],
     }, "invoice-saas-web")
 
-    # 6) Wait for API
-    print(f"[render] waiting for {api_url}/api/health ...")
-    for i in range(60):
+    # 4) Wait for API health (free tier builds + boots can take a few minutes)
+    print(f"[render] waiting for {api_url}/api/health (this can take 3-8 min on free tier)...")
+    for i in range(80):
         st, body = http("GET", f"{api_url}/api/health", {"User-Agent": UA}, timeout=20)
         if st == 200:
             print(f"[render] API LIVE: {body}")
-            print(f"\n✅ Frontend: {web_url}\n✅ API: {api_url}")
+            print(f"\n✅ Frontend: {web_url}\n✅ API:      {api_url}")
+            print("\nFree tier: services sleep after 15 min idle (first hit ~30s cold start).")
             return
+        if i % 4 == 0:
+            print(f"   ...still waiting ({i*15}s elapsed)")
         time.sleep(15)
     print("[render] API not healthy yet — check Render dashboard logs.")
 
