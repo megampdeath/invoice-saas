@@ -88,8 +88,3 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-
-export function useActiveOrgId(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("activeOrgId");
-}

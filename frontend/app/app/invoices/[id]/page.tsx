@@ -1,13 +1,12 @@
 "use client";
 
-import { use, useState } from "react";
+import { useEffect, useState } from "react";
 import { InvoicePreview } from "@/components/invoice-preview";
 import { InvoiceReviewForm } from "@/components/invoice-review-form";
 import { api, type InvoiceDetail } from "@/lib/api";
-import { useEffect } from "react";
 
-export default function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function ReviewPage({ params }: { params: { id: string } }) {
+  const { id } = params;
   const [inv, setInv] = useState<InvoiceDetail | null>(null);
 
   useEffect(() => {
