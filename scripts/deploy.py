@@ -146,11 +146,13 @@ def main():
         "type": "web_service", "name": "invoice-saas-api", "region": "ohio",
         "repo": repo_url, "branch": "main",
         "serviceDetails": {
-            "runtime": "docker",
-            "dockerfilePath": "./backend/Dockerfile",
-            "dockerContext": "./backend",
+            "env": "docker",
             "plan": "free",
             "healthCheckPath": "/api/health",
+            "envSpecificDetails": {
+                "dockerfilePath": "./backend/Dockerfile",
+                "dockerContext": "./backend",
+            },
         },
         "envVars": api_envs,
     }
@@ -171,10 +173,12 @@ def main():
         "type": "web_service", "name": "invoice-saas-web", "region": "ohio",
         "repo": repo_url, "branch": "main",
         "serviceDetails": {
-            "runtime": "docker",
-            "dockerfilePath": "./frontend/Dockerfile",
-            "dockerContext": "./frontend",
+            "env": "docker",
             "plan": "free",
+            "envSpecificDetails": {
+                "dockerfilePath": "./frontend/Dockerfile",
+                "dockerContext": "./frontend",
+            },
         },
         "envVars": web_envs,
     }
