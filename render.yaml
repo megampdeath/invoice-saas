@@ -1,0 +1,100 @@
+# Render blueprint for the Invoice SaaS.
+# Docs: https://render.com/docs/blueprint-spec
+#
+# Required environment groups / secrets to set in the Render dashboard (or via
+# the API at deploy time):
+#   - SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_JWT_ISSUER, SUPABASE_JWT_AUDIENCE
+#   - DATABASE_URL, DIRECT_DATABASE_URL
+#   - REDIS_URL (created below as render-managed Redis)
+#   - AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY (for Textract)
+#   - PREVIEW_TOKEN_SECRET
+#   - STRIPE_* (only when paid plans go live; optional for free tier)
+#
+# Frontend-safe env (NEXT_PUBLIC_*) is set on the frontend service.
+
+services:
+  - type: redis
+    name: invoice-saas-redis
+    region: ohio
+    ipAllowList: []        # only Render-internal services reach it
+    plan: free
+
+  - type: web
+    name: invoice-saas-api
+    region: ohio
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: invoice-saas-redis
+          property: connectionString
+      - key: APP_ENV
+        value: production
+      - key: EXTRACTION_PROVIDER
+        value: mock          # switch to "textract" once AWS keys are confirmed
+      - key: STORAGE_BACKEND
+        value: supabase
+      - key: SUPABASE_STORAGE_ORIGINALS_BUCKET
+        value: invoice-originals
+      - key: SUPABASE_STORAGE_EXPORTS_BUCKET
+        value: invoice-exports
+      - key: SUPABASE_STORAGE_OCR_RAW_BUCKET
+        value: ocr-raw-results
+      - key: WEB_CONCURRENCY
+        value: 2
+      # Secrets (synced from the env group "invoice-saas-secrets"):
+      - fromGroup: invoice-saas-secrets
+
+  - type: worker
+    name: invoice-saas-worker
+    region: ohio
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile.worker
+    dockerContext: ./backend
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: invoice-saas-redis
+          property: connectionString
+      - key: APP_ENV
+        value: production
+      - key: EXTRACTION_PROVIDER
+        value: mock
+      - key: STORAGE_BACKEND
+        value: supabase
+      - key: SUPABASE_STORAGE_ORIGINALS_BUCKET
+        value: invoice-originals
+      - key: SUPABASE_STORAGE_EXPORTS_BUCKET
+        value: invoice-exports
+      - key: SUPABASE_STORAGE_OCR_RAW_BUCKET
+        value: ocr-raw-results
+      - fromGroup: invoice-saas-secrets
+
+  - type: web
+    name: invoice-saas-web
+    region: ohio
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: NEXT_PUBLIC_BACKEND_BASE_URL
+        value: https://invoice-saas-api.onrender.com   # updated to the real API URL after first deploy
+      - key: BACKEND_BASE_URL
+        value: https://invoice-saas-api.onrender.com
+      - key: NODE_ENV
+        value: production
