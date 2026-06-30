@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { supabase, signOut } from "@/lib/auth";
-import { api, type OrgOut } from "@/lib/api";
+import { signOut } from "@/lib/auth";
+import { OrgProvider, useOrg } from "@/lib/org-context";
+import { useRouter } from "next/navigation";
 
 const NAV = [
   { href: "/app/invoices", label: "Inbox" },
@@ -13,35 +13,12 @@ const NAV = [
   { href: "/app/settings", label: "Settings" },
 ];
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+function Shell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [ready, setReady] = useState(false);
-  const [orgs, setOrgs] = useState<OrgOut[]>([]);
-  const [orgId, setOrgId] = useState<string | null>(null);
+  const { orgs, orgId, setOrgId, loading } = useOrg();
 
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        router.replace("/login");
-        return;
-      }
-      try {
-        const list = await api.get<OrgOut[]>("/api/organizations");
-        setOrgs(list);
-        const stored = typeof window !== "undefined" ? localStorage.getItem("activeOrgId") : null;
-        const active = stored && list.some((o) => o.id === stored) ? stored : list[0]?.id ?? null;
-        setOrgId(active);
-        if (active) localStorage.setItem("activeOrgId", active);
-      } catch {
-        // user may have no org yet
-      }
-      setReady(true);
-    })();
-  }, [router]);
-
-  if (!ready) return <div className="p-8 text-sm text-gray-500">Loading…</div>;
+  if (loading) return <div className="p-8 text-sm text-gray-500">Loading…</div>;
 
   return (
     <div className="flex min-h-screen">
@@ -64,11 +41,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {orgs.length > 0 && (
             <select
               value={orgId ?? ""}
-              onChange={(e) => {
-                setOrgId(e.target.value);
-                localStorage.setItem("activeOrgId", e.target.value);
-                router.refresh();
-              }}
+              onChange={(e) => { setOrgId(e.target.value); router.refresh(); }}
               className="mb-2 w-full rounded border border-gray-300 px-2 py-1 text-xs"
             >
               {orgs.map((o) => (
@@ -86,5 +59,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
       <main className="flex-1 overflow-auto p-6">{children}</main>
     </div>
+  );
+}
+
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <OrgProvider>
+      <Shell>{children}</Shell>
+    </OrgProvider>
   );
 }

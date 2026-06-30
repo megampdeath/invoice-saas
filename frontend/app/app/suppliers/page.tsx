@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useOrg } from "@/lib/org-context";
 
 interface Supplier {
   id: string;
@@ -12,13 +13,9 @@ interface Supplier {
 }
 
 export default function SuppliersPage() {
-  const [orgId, setOrgId] = useState<string | null>(null);
+  const { orgId, loading } = useOrg();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") setOrgId(localStorage.getItem("activeOrgId"));
-  }, []);
 
   useEffect(() => {
     if (!orgId) return;

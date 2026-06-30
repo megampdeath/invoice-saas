@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type OrgOut } from "@/lib/api";
-import { ApiError } from "@/lib/api";
+import { api, type OrgOut, ApiError } from "@/lib/api";
+import { useOrg } from "@/lib/org-context";
 
 interface Usage {
   plan: string;
@@ -14,15 +14,11 @@ interface Usage {
 }
 
 export default function SettingsPage() {
-  const [orgId, setOrgId] = useState<string | null>(null);
+  const { orgId, loading } = useOrg();
   const [org, setOrg] = useState<OrgOut | null>(null);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") setOrgId(localStorage.getItem("activeOrgId"));
-  }, []);
 
   useEffect(() => {
     if (!orgId) return;
@@ -40,6 +36,8 @@ export default function SettingsPage() {
       setErr(e instanceof ApiError ? e.message : "Checkout failed");
     }
   }
+
+  if (loading || !orgId) return <p className="text-sm text-gray-500">Loading your workspace…</p>;
 
   return (
     <div className="max-w-2xl space-y-6">

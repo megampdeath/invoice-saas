@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { formatDateTime } from "@/lib/formatting";
+import { useOrg } from "@/lib/org-context";
 
 interface ExportJob {
   id: string;
@@ -13,16 +14,12 @@ interface ExportJob {
 }
 
 export default function ExportsPage() {
-  const [orgId, setOrgId] = useState<string | null>(null);
+  const { orgId, loading } = useOrg();
   const [fmt, setFmt] = useState<"csv" | "xlsx">("xlsx");
   const [status, setStatus] = useState("approved");
   const [jobs, setJobs] = useState<ExportJob[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") setOrgId(localStorage.getItem("activeOrgId"));
-  }, []);
 
   const load = useCallback(async () => {
     if (!orgId) return;
@@ -47,6 +44,8 @@ export default function ExportsPage() {
       setErr(e instanceof ApiError ? e.message : "Export failed");
     }
   }
+
+  if (loading || !orgId) return <p className="text-sm text-gray-500">Loading your workspace…</p>;
 
   return (
     <div className="space-y-4">

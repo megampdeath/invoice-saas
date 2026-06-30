@@ -5,20 +5,17 @@ import { api, type InvoiceList, type InvoiceListItem } from "@/lib/api";
 import { UploadDropzone } from "@/components/upload-dropzone";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate, formatMoney } from "@/lib/formatting";
+import { useOrg } from "@/lib/org-context";
 import Link from "next/link";
 
 const STATUSES = ["", "uploaded", "processing", "needs_review", "approved", "failed", "archived"];
 
 export default function InvoicesPage() {
-  const [orgId, setOrgId] = useState<string | null>(null);
+  const { orgId, loading } = useOrg();
   const [data, setData] = useState<InvoiceList | null>(null);
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
   const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") setOrgId(localStorage.getItem("activeOrgId"));
-  }, []);
 
   const load = useCallback(async () => {
     if (!orgId) return;
@@ -35,7 +32,7 @@ export default function InvoicesPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (!orgId) return <p className="text-sm text-gray-500">Select or create an organization first.</p>;
+  if (loading || !orgId) return <p className="text-sm text-gray-500">Loading your workspace…</p>;
 
   return (
     <div className="space-y-4">
